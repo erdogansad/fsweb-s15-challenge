@@ -1,14 +1,19 @@
+const jwt = require("jsonwebtoken");
+const { JWT_SECRET } = require("./secret.js");
+
 module.exports = (req, res, next) => {
-  next();
-  /*
-    EKLEYİN
-
-    1- Authorization headerında geçerli token varsa, sıradakini çağırın.
-
-    2- Authorization headerında token yoksa,
-      response body şu mesajı içermelidir: "token gereklidir".
-
-    3- Authorization headerında geçersiz veya timeout olmuş token varsa,
-	  response body şu mesajı içermelidir: "token geçersizdir".
-  */
+  const token = req.headers.authorization;
+  if (token) {
+    const jwtToken = token.split(" ")[1];
+    jwt.verify(jwtToken, JWT_SECRET, (err, decoded) => {
+      if (decoded) {
+        req.decodedJwt = decoded;
+        next();
+      } else {
+        res.status(401).json({ message: "token geçersizdir" });
+      }
+    });
+  } else {
+    res.status(400).json({ message: "token gereklidir" });
+  }
 };

@@ -1,59 +1,38 @@
-const router = require('express').Router();
+const router = require("express").Router();
+const { bodyController, usernameExists } = require("./auth-middleware.js");
+const { create, getByName } = require("./auth-model.js");
+const bcrypt = require("bcryptjs");
+const jwt = require("jsonwebtoken");
+const { JWT_SECRET } = require("../middleware/secret.js");
 
-router.post('/register', (req, res) => {
-  res.end('kayıt olmayı ekleyin, lütfen!');
-  /*
-    EKLEYİN
-    Uçnoktanın işlevselliğine yardımcı olmak için middlewarelar yazabilirsiniz.
-    2^8 HASH TURUNU AŞMAYIN!
-
-    1- Yeni bir hesap kaydetmek için istemci "kullanıcı adı" ve "şifre" sağlamalıdır:
-      {
-        "username": "Captain Marvel", // `users` tablosunda var olmalıdır
-        "password": "foobar"          // kaydedilmeden hashlenmelidir
-      }
-
-    2- BAŞARILI kayıtta,
-      response body `id`, `username` ve `password` içermelidir:
-      {
-        "id": 1,
-        "username": "Captain Marvel",
-        "password": "2a$08$jG.wIGR2S4hxuyWNcBf9MuoC4y0dNy7qC/LbmtuFBSdIhWks2LhpG"
-      }
-
-    3- Request bodyde `username` ya da `password` yoksa BAŞARISIZ kayıtta,
-      response body şunu içermelidir: "username ve şifre gereklidir".
-
-    4- Kullanıcı adı alınmışsa BAŞARISIZ kayıtta,
-      şu mesajı içermelidir: "username alınmış".
-  */
+router.post("/register", bodyController, usernameExists, async (req, res, next) => {
+  try {
+    const { username, password } = req.body;
+    const hash = await bcrypt.hash(password, 8);
+    const user = await create({ username, password: hash });
+    res.status(201).json(user);
+  } catch (e) {
+    next(e);
+  }
 });
 
-router.post('/login', (req, res) => {
-  res.end('girişi ekleyin, lütfen!');
-  /*
-    EKLEYİN
-    Uçnoktanın işlevselliğine yardımcı olmak için middlewarelar yazabilirsiniz.
-
-    1- Var olan bir kullanıcı giriş yapabilmek için bir `username` ve `password` sağlamalıdır:
-      {
-        "username": "Captain Marvel",
-        "password": "foobar"
-      }
-
-    2- BAŞARILI girişte,
-      response body `message` ve `token` içermelidir:
-      {
-        "message": "welcome, Captain Marvel",
-        "token": "eyJhbGciOiJIUzI ... ETC ... vUPjZYDSa46Nwz8"
-      }
-
-    3- req body de `username` ya da `password` yoksa BAŞARISIZ giriş,
-      şu mesajı içermelidir: "username ve password gereklidir".
-
-    4- "username" db de yoksa ya da "password" yanlışsa BAŞARISIZ giriş,
-      şu mesajı içermelidir: "geçersiz kriterler".
-  */
+router.post("/login", bodyController, async (req, res, next) => {
+  try {
+    const { username, password } = req.body,
+      query = await getByName(username),
+      compare = query ? await bcrypt.compare(password, query.password) : false,
+      token = query ? jwt.sign({ id: query.id, username: query.username }, JWT_SECRET, { expiresIn: "3h" }) : null;
+    if (query && compare) {
+      res.json({
+        message: `welcome, ${username}`,
+        token: token,
+      });
+    } else {
+      res.status(401).json({ message: "geçersiz kriterler" });
+    }
+  } catch (e) {
+    next(e);
+  }
 });
 
 module.exports = router;
